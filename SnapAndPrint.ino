@@ -164,6 +164,41 @@ void handleSerialCommand(String command)
     return;
   }
 
+// ===================================================
+// MANUAL BILL PAYMENT
+// ===================================================
+
+if (command.startsWith("BILL:"))
+{
+  String value = command.substring(5);
+
+  int amount = value.toInt();
+
+  if (amount == 50 ||
+      amount == 100 ||
+      amount == 500 ||
+      amount == 1000)
+  {
+    if (paymentActive)
+    {
+      addPayment(amount);
+
+      Serial.print(F("BILL ACCEPTED:"));
+      Serial.println(amount);
+    }
+    else
+    {
+      Serial.println(F("STATUS:PAYMENT NOT ACTIVE"));
+    }
+  }
+  else
+  {
+    Serial.println(F("STATUS:INVALID BILL"));
+  }
+
+  return;
+}
+
 
   // ===================================================
   // RESET

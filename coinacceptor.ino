@@ -15,7 +15,9 @@ const byte COIN_ACCEPTOR_PIN = 2;
 // PULSE SETTINGS
 // =====================================================
 
-const unsigned long COIN_PULSE_TIMEOUT = 300;
+// Time with NO pulse before we consider
+// the current coin completely finished.
+const unsigned long COIN_PULSE_TIMEOUT = 500;
 
 
 // =====================================================
@@ -72,26 +74,43 @@ void updateCoinAcceptor()
     return;
 
 
-  // Wait until the entire pulse train is finished.
+  // ===================================================
+  // WAIT FOR COMPLETE PULSE TRAIN
+  // ===================================================
 
-  if (millis() - lastCoinPulseTime <
-      COIN_PULSE_TIMEOUT)
+  noInterrupts();
+
+  unsigned long lastPulse = lastCoinPulseTime;
+
+  interrupts();
+
+
+  if (millis() - lastPulse < COIN_PULSE_TIMEOUT)
   {
     return;
   }
 
 
-  // Safely copy the pulse count.
+  // ===================================================
+  // COPY AND CLEAR PULSE DATA
+  // ===================================================
 
   noInterrupts();
 
   unsigned int pulses = coinPulseCount;
 
   coinPulseCount = 0;
-
   coinPulseActive = false;
 
   interrupts();
+
+
+  // ===================================================
+  // DEBUG
+  // ===================================================
+
+  Serial.print(F("PULSE COUNT: "));
+  Serial.println(pulses);
 
 
   // ===================================================
@@ -140,7 +159,9 @@ void updateCoinAcceptor()
   Serial.println(coinValue);
 
 
-  // Send coin value to the brain.
+  // ===================================================
+  // SEND TO PAYMENT BRAIN
+  // ===================================================
 
   addPayment(coinValue);
 }
