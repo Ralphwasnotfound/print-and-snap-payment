@@ -294,13 +294,20 @@ void handleSerialCommand(String command)
   // ===================================================
 
   if (command == "DISPENSE:50")
+{
+  bool success = dispenseBill50();
+
+  if (success)
   {
-    dispenseBill50();
-
     Serial.println(F("DISPENSE:50:COMPLETE"));
-
-    return;
   }
+  else
+  {
+    Serial.println(F("DISPENSE:50:FAILED"));
+  }
+
+  return;
+}
 
 
   // ===================================================
@@ -308,13 +315,20 @@ void handleSerialCommand(String command)
   // ===================================================
 
   if (command == "DISPENSE:100")
+{
+  bool success = dispenseBill100();
+
+  if (success)
   {
-    dispenseBill100();
-
     Serial.println(F("DISPENSE:100:COMPLETE"));
-
-    return;
   }
+  else
+  {
+    Serial.println(F("DISPENSE:100:FAILED"));
+  }
+
+  return;
+}
 
 
   // ===================================================
@@ -552,101 +566,157 @@ void addPayment(int amount)
   Serial.println(F("STATUS:WAITING FOR PAYMENT"));
 }
 
-
 // =====================================================
-// DISPENSE DYNAMIC CHANGE
+// DYNAMIC CHANGE DISPENSING
 // =====================================================
 //
-// Available denominations:
-// ₱20, ₱10, ₱5, ₱1
+// DENOMINATION PRIORITY:
 //
-// The actual change amount is calculated dynamically.
-// Nothing is hardcoded to a specific amount.
+// ₱100 BILL
+// ₱50  BILL
+// ₱20  COIN
+// ₱10  COIN
+// ₱5   COIN
+// ₱1   COIN
 //
 // =====================================================
 
 void dispenseChange(int change)
 {
   if (change <= 0)
+  {
+    Serial.println(F("NO CHANGE TO DISPENSE"));
     return;
-
+  }
 
   int remaining = change;
 
-
+  Serial.println();
   Serial.println(F("======================================"));
-
-  Serial.print(F("DISPENSING CHANGE: PHP "));
+  Serial.print(F("CHANGE REQUIRED: PHP "));
   Serial.println(change);
-
   Serial.println(F("======================================"));
 
 
   // ===================================================
-  // ₱20 COINS
+  // ₱100 BILL
+  // ===================================================
+
+  while (remaining >= 100)
+  {
+    Serial.println(F("CHANGE -> PHP 100 BILL"));
+
+    if (!dispenseBill100())
+    {
+      Serial.println(F("ERROR: PHP 100 BILL DISPENSER"));
+      Serial.println(F("CHANGE DISPENSING STOPPED"));
+      return;
+    }
+
+    remaining -= 100;
+
+    Serial.print(F("REMAINING: PHP "));
+    Serial.println(remaining);
+  }
+
+
+  // ===================================================
+  // ₱50 BILL
+  // ===================================================
+
+  while (remaining >= 50)
+  {
+    Serial.println(F("CHANGE -> PHP 50 BILL"));
+
+    if (!dispenseBill50())
+    {
+      Serial.println(F("ERROR: PHP 50 BILL DISPENSER"));
+      Serial.println(F("CHANGE DISPENSING STOPPED"));
+      return;
+    }
+
+    remaining -= 50;
+
+    Serial.print(F("REMAINING: PHP "));
+    Serial.println(remaining);
+  }
+
+
+  // ===================================================
+  // ₱20 COIN
   // ===================================================
 
   while (remaining >= 20)
   {
+    Serial.println(F("CHANGE -> PHP 20 COIN"));
+
     dispenseTwentyPeso();
 
     remaining -= 20;
 
-    Serial.print(F("REMAINING CHANGE: PHP "));
+    Serial.print(F("REMAINING: PHP "));
     Serial.println(remaining);
   }
 
 
   // ===================================================
-  // ₱10 COINS
+  // ₱10 COIN
   // ===================================================
 
   while (remaining >= 10)
   {
+    Serial.println(F("CHANGE -> PHP 10 COIN"));
+
     dispenseTenPeso();
 
     remaining -= 10;
 
-    Serial.print(F("REMAINING CHANGE: PHP "));
+    Serial.print(F("REMAINING: PHP "));
     Serial.println(remaining);
   }
 
 
   // ===================================================
-  // ₱5 COINS
+  // ₱5 COIN
   // ===================================================
 
   while (remaining >= 5)
   {
+    Serial.println(F("CHANGE -> PHP 5 COIN"));
+
     dispenseFivePeso();
 
     remaining -= 5;
 
-    Serial.print(F("REMAINING CHANGE: PHP "));
+    Serial.print(F("REMAINING: PHP "));
     Serial.println(remaining);
   }
 
 
   // ===================================================
-  // ₱1 COINS
+  // ₱1 COIN
   // ===================================================
 
   while (remaining >= 1)
   {
+    Serial.println(F("CHANGE -> PHP 1 COIN"));
+
     dispenseOnePeso(1);
 
     remaining -= 1;
 
-    Serial.print(F("REMAINING CHANGE: PHP "));
+    Serial.print(F("REMAINING: PHP "));
     Serial.println(remaining);
   }
 
 
   // ===================================================
   // COMPLETE
-  // ===================================================
+  // =====================================================
 
   Serial.println(F("======================================"));
   Serial.println(F("CHANGE DISPENSING COMPLETE"));
+  Serial.print(F("TOTAL CHANGE: PHP "));
+  Serial.println(change);
   Serial.println(F("======================================"));
 }

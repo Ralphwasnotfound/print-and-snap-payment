@@ -13,11 +13,23 @@
 // IN4 = D4
 // IR  = D13
 //
-// Controlled by PrintAndSnap.ino:
+// =====================================================
 //
-// DISPENSE:50
-// DISPENSE:100
-// STOPDISPENSERS
+// FINAL BEHAVIOR:
+//
+// Motor starts
+//     ↓
+// IR detects bill
+//     ↓
+// Motor stops
+//     ↓
+// Bill detection is logged
+//
+// If IR does NOT detect within timeout:
+//     ↓
+// Motor stops
+//     ↓
+// DISPENSER FAULT is reported
 //
 // =====================================================
 
@@ -90,38 +102,52 @@ void stopBillMotors()
 // DISPENSE ₱50
 // =====================================================
 
-void dispenseBill50()
+bool dispenseBill50()
 {
   stopBillMotors();
 
   Serial.println(F("STATUS:DISPENSING PHP 50"));
 
-  // Start motor
+  // ---------------------------------------------------
+  // Start ₱50 motor
+  // ---------------------------------------------------
+
   digitalWrite(BILL50_IN1, HIGH);
   digitalWrite(BILL50_IN2, LOW);
 
   unsigned long startTime = millis();
 
 
+  // ---------------------------------------------------
+  // Wait for IR
+  // ---------------------------------------------------
+
   while (millis() - startTime < BILL_SENSOR_TIMEOUT)
   {
+    // -----------------------------------------------
     // Emergency stop command
+    // -----------------------------------------------
+
     if (Serial.available() > 0)
     {
-      char command = Serial.read();
+      String command = Serial.readStringUntil('\n');
+      command.trim();
 
-      if (command == '0')
+      if (command == "STOPDISPENSERS")
       {
         stopBillMotors();
 
         Serial.println(F("STATUS:DISPENSER STOPPED"));
 
-        return;
+        return false;
       }
     }
 
 
-    // Bill detected
+    // -----------------------------------------------
+    // BILL DETECTED
+    // -----------------------------------------------
+
     if (digitalRead(BILL50_IR) == LOW)
     {
       stopBillMotors();
@@ -129,15 +155,21 @@ void dispenseBill50()
       Serial.println(F("BILL50:SENSOR"));
       Serial.println(F("STATUS:PHP 50 DISPENSED"));
 
-      return;
+      return true;
     }
   }
 
 
-  // Timeout
+  // =================================================
+  // TIMEOUT / FAULT
+  // =================================================
+
   stopBillMotors();
 
+  Serial.println(F("BILL50:FAULT"));
   Serial.println(F("STATUS:PHP 50 DISPENSER TIMEOUT"));
+
+  return false;
 }
 
 
@@ -145,38 +177,52 @@ void dispenseBill50()
 // DISPENSE ₱100
 // =====================================================
 
-void dispenseBill100()
+bool dispenseBill100()
 {
   stopBillMotors();
 
   Serial.println(F("STATUS:DISPENSING PHP 100"));
 
-  // Start motor
+  // ---------------------------------------------------
+  // Start ₱100 motor
+  // ---------------------------------------------------
+
   digitalWrite(BILL100_IN3, HIGH);
   digitalWrite(BILL100_IN4, LOW);
 
   unsigned long startTime = millis();
 
 
+  // ---------------------------------------------------
+  // Wait for IR
+  // ---------------------------------------------------
+
   while (millis() - startTime < BILL_SENSOR_TIMEOUT)
   {
+    // -----------------------------------------------
     // Emergency stop command
+    // -----------------------------------------------
+
     if (Serial.available() > 0)
     {
-      char command = Serial.read();
+      String command = Serial.readStringUntil('\n');
+      command.trim();
 
-      if (command == '0')
+      if (command == "STOPDISPENSERS")
       {
         stopBillMotors();
 
         Serial.println(F("STATUS:DISPENSER STOPPED"));
 
-        return;
+        return false;
       }
     }
 
 
-    // Bill detected
+    // -----------------------------------------------
+    // BILL DETECTED
+    // -----------------------------------------------
+
     if (digitalRead(BILL100_IR) == LOW)
     {
       stopBillMotors();
@@ -184,13 +230,19 @@ void dispenseBill100()
       Serial.println(F("BILL100:SENSOR"));
       Serial.println(F("STATUS:PHP 100 DISPENSED"));
 
-      return;
+      return true;
     }
   }
 
 
-  // Timeout
+  // =================================================
+  // TIMEOUT / FAULT
+  // =================================================
+
   stopBillMotors();
 
+  Serial.println(F("BILL100:FAULT"));
   Serial.println(F("STATUS:PHP 100 DISPENSER TIMEOUT"));
+
+  return false;
 }
