@@ -10,13 +10,10 @@
 // ₱10 -> D10 / A3
 // ₱20 -> D11 / A4
 //
-// Controlled by PrintAndSnap.ino:
+// IR SENSORS ARE MONITORING ONLY.
 //
-// DISPENSE:1
-// DISPENSE:5
-// DISPENSE:10
-// DISPENSE:20
-// STOPDISPENSERS
+// The IR sensors DO NOT control the servos.
+// The servos operate using timing.
 //
 // =====================================================
 
@@ -64,23 +61,69 @@ const byte PUSH_20_ANGLE = 40;
 
 
 // =====================================================
-// SENSOR TIMEOUT
+// SERVO TIMING
 // =====================================================
 
-const unsigned long SENSOR_TIMEOUT = 1500;
+// Time servo stays at PUSH position
+const unsigned long COIN_PUSH_HOLD = 500;
+
+// Time between dispensing cycles
+const unsigned long COIN_REPEAT_DELAY = 500;
 
 
 // =====================================================
-// INITIALIZE
+// IR MONITORING
+// =====================================================
+
+// Small debounce so one coin doesn't accidentally
+// create multiple detections.
+const unsigned long IR_DEBOUNCE = 100;
+
+
+// =====================================================
+// MONITOR COUNTERS
+// =====================================================
+
+volatile unsigned int detected1 = 0;
+volatile unsigned int detected5 = 0;
+volatile unsigned int detected10 = 0;
+volatile unsigned int detected20 = 0;
+
+
+// =====================================================
+// INITIAL IR STATES
+// =====================================================
+
+byte lastIR1State;
+byte lastIR5State;
+byte lastIR10State;
+byte lastIR20State;
+
+unsigned long lastIR1Time = 0;
+unsigned long lastIR5Time = 0;
+unsigned long lastIR10Time = 0;
+unsigned long lastIR20Time = 0;
+
+
+// =====================================================
+// INITIALIZE COIN DISPENSER
 // =====================================================
 
 void setupCoinDispenser()
 {
+  // ===================================================
+  // ATTACH SERVOS
+  // ===================================================
+
   servo1.attach(SERVO_1_PIN);
   servo5.attach(SERVO_5_PIN);
   servo10.attach(SERVO_10_PIN);
   servo20.attach(SERVO_20_PIN);
 
+
+  // ===================================================
+  // IR SENSORS
+  // ===================================================
 
   pinMode(IR_1_PIN, INPUT);
   pinMode(IR_5_PIN, INPUT);
@@ -88,169 +131,439 @@ void setupCoinDispenser()
   pinMode(IR_20_PIN, INPUT);
 
 
+  // ===================================================
+  // READ INITIAL SENSOR STATES
+  // ===================================================
+
+  lastIR1State = digitalRead(IR_1_PIN);
+  lastIR5State = digitalRead(IR_5_PIN);
+  lastIR10State = digitalRead(IR_10_PIN);
+  lastIR20State = digitalRead(IR_20_PIN);
+
+
+  // ===================================================
+  // DEFAULT POSITION = HOME
+  // ===================================================
+
   coinDispensersHome();
 
   delay(500);
+
+
+  Serial.println(F("COIN_DISPENSER:READY"));
 }
 
 
 // =====================================================
-// ₱1
+// IR MONITOR
+// =====================================================
+//
+// The IR sensors ONLY count coins.
+//
+// LOW = coin detected
+//
+// They do NOT stop or control the servo.
+//
 // =====================================================
 
-void dispenseOnePeso()
+void updateCoinSensors()
 {
-  Serial.println(F("STATUS:DISPENSING PHP 1"));
+  unsigned long now = millis();
 
-  servo1.write(PUSH_1_ANGLE);
+  // ===================================================
+  // ₱1 SENSOR
+  // ===================================================
 
-  unsigned long startTime = millis();
+  byte state1 = digitalRead(IR_1_PIN);
 
-  bool coinDetected = false;
-
-
-  while (millis() - startTime < SENSOR_TIMEOUT)
+  if (state1 != lastIR1State)
   {
-    if (digitalRead(IR_1_PIN) == LOW)
+    lastIR1State = state1;
+
+    // Detect falling edge
+    if (state1 == LOW)
     {
-      coinDetected = true;
-      break;
+      if (now - lastIR1Time >= IR_DEBOUNCE)
+      {
+        detected1++;
+
+        lastIR1Time = now;
+
+        Serial.print(F("IR:PHP1 COIN DETECTED #"));
+        Serial.println(detected1);
+      }
     }
   }
 
 
-  servo1.write(HOME_ANGLE);
+  // ===================================================
+  // ₱5 SENSOR
+  // ===================================================
 
+  byte state5 = digitalRead(IR_5_PIN);
 
-  if (coinDetected)
+  if (state5 != lastIR5State)
   {
-    Serial.println(F("COIN1:SENSOR"));
-    Serial.println(F("STATUS:PHP 1 DISPENSED"));
+    lastIR5State = state5;
+
+    if (state5 == LOW)
+    {
+      if (now - lastIR5Time >= IR_DEBOUNCE)
+      {
+        detected5++;
+
+        lastIR5Time = now;
+
+        Serial.print(F("IR:PHP5 COIN DETECTED #"));
+        Serial.println(detected5);
+      }
+    }
   }
-  else
+
+
+  // ===================================================
+  // ₱10 SENSOR
+  // ===================================================
+
+  byte state10 = digitalRead(IR_10_PIN);
+
+  if (state10 != lastIR10State)
   {
-    Serial.println(F("STATUS:PHP 1 DISPENSER TIMEOUT"));
+    lastIR10State = state10;
+
+    if (state10 == LOW)
+    {
+      if (now - lastIR10Time >= IR_DEBOUNCE)
+      {
+        detected10++;
+
+        lastIR10Time = now;
+
+        Serial.print(F("IR:PHP10 COIN DETECTED #"));
+        Serial.println(detected10);
+      }
+    }
+  }
+
+
+  // ===================================================
+  // ₱20 SENSOR
+  // ===================================================
+
+  byte state20 = digitalRead(IR_20_PIN);
+
+  if (state20 != lastIR20State)
+  {
+    lastIR20State = state20;
+
+    if (state20 == LOW)
+    {
+      if (now - lastIR20Time >= IR_DEBOUNCE)
+      {
+        detected20++;
+
+        lastIR20Time = now;
+
+        Serial.print(F("IR:PHP20 COIN DETECTED #"));
+        Serial.println(detected20);
+      }
+    }
   }
 }
 
 
 // =====================================================
-// ₱5
+// RESET MONITOR COUNTERS
+// =====================================================
+
+void resetCoinMonitoring()
+{
+  detected1 = 0;
+  detected5 = 0;
+  detected10 = 0;
+  detected20 = 0;
+
+  Serial.println(F("IR MONITOR COUNTERS RESET"));
+}
+
+
+// =====================================================
+// REPORT ₱1 RESULT
+// =====================================================
+
+void reportOnePesoResult(int expected)
+{
+  Serial.println(F("--------------------------------------"));
+  Serial.println(F("PHP 1 DISPENSER LOG"));
+
+  Serial.print(F("EXPECTED: "));
+  Serial.println(expected);
+
+  Serial.print(F("IR DETECTED: "));
+  Serial.println(detected1);
+
+  if (detected1 == expected)
+  {
+    Serial.println(F("RESULT: OK"));
+  }
+  else
+  {
+    Serial.println(F("RESULT: FAULT"));
+  }
+
+  Serial.println(F("--------------------------------------"));
+}
+
+
+// =====================================================
+// REPORT ₱5 RESULT
+// =====================================================
+
+void reportFivePesoResult()
+{
+  Serial.println(F("--------------------------------------"));
+  Serial.println(F("PHP 5 DISPENSER LOG"));
+
+  Serial.println(F("EXPECTED: 1"));
+
+  Serial.print(F("IR DETECTED: "));
+  Serial.println(detected5);
+
+  if (detected5 == 1)
+  {
+    Serial.println(F("RESULT: OK"));
+  }
+  else
+  {
+    Serial.println(F("RESULT: FAULT"));
+  }
+
+  Serial.println(F("--------------------------------------"));
+}
+
+
+// =====================================================
+// REPORT ₱10 RESULT
+// =====================================================
+
+void reportTenPesoResult()
+{
+  Serial.println(F("--------------------------------------"));
+  Serial.println(F("PHP 10 DISPENSER LOG"));
+
+  Serial.println(F("EXPECTED: 1"));
+
+  Serial.print(F("IR DETECTED: "));
+  Serial.println(detected10);
+
+  if (detected10 == 1)
+  {
+    Serial.println(F("RESULT: OK"));
+  }
+  else
+  {
+    Serial.println(F("RESULT: FAULT"));
+  }
+
+  Serial.println(F("--------------------------------------"));
+}
+
+
+// =====================================================
+// REPORT ₱20 RESULT
+// =====================================================
+
+void reportTwentyPesoResult()
+{
+  Serial.println(F("--------------------------------------"));
+  Serial.println(F("PHP 20 DISPENSER LOG"));
+
+  Serial.println(F("EXPECTED: 1"));
+
+  Serial.print(F("IR DETECTED: "));
+  Serial.println(detected20);
+
+  if (detected20 == 1)
+  {
+    Serial.println(F("RESULT: OK"));
+  }
+  else
+  {
+    Serial.println(F("RESULT: FAULT"));
+  }
+
+  Serial.println(F("--------------------------------------"));
+}
+
+
+// =====================================================
+// ₱1 DISPENSER
+// =====================================================
+//
+// Example: dispenseOnePeso(2)
+//
+// Servo:
+// 30° → 0° → WAIT
+// 30° → 0° → WAIT
+//
+// IR:
+// Only monitors what actually comes out.
+//
+// =====================================================
+
+void dispenseOnePeso(int quantity)
+{
+  if (quantity <= 0)
+    return;
+
+
+  // Reset monitoring for this dispensing operation
+
+  detected1 = 0;
+
+
+  Serial.println();
+  Serial.println(F("======================================"));
+
+  Serial.print(F("DISPENSING PHP 1 x "));
+  Serial.println(quantity);
+
+  Serial.println(F("IR MODE: MONITOR ONLY"));
+
+  Serial.println(F("======================================"));
+
+
+  // ===================================================
+  // DISPENSE REQUIRED NUMBER OF COINS
+  // ===================================================
+
+  for (int i = 0; i < quantity; i++)
+  {
+    Serial.print(F("PHP 1 PUSH "));
+    Serial.print(i + 1);
+    Serial.print(F(" OF "));
+    Serial.println(quantity);
+
+
+    // =================================================
+    // PUSH
+    // =================================================
+
+    Serial.println(F("SERVO D8 -> 30"));
+
+    servo1.write(PUSH_1_ANGLE);
+
+    delay(COIN_PUSH_HOLD);
+
+
+    // =================================================
+    // HOME
+    // =================================================
+
+    Serial.println(F("SERVO D8 -> 0"));
+
+    servo1.write(HOME_ANGLE);
+
+
+    // =================================================
+    // WAIT BEFORE NEXT COIN
+    // =================================================
+
+    if (i < quantity - 1)
+    {
+      Serial.println(F("WAITING BEFORE NEXT PHP 1..."));
+
+      delay(COIN_REPEAT_DELAY);
+    }
+  }
+
+
+  // ===================================================
+  // GIVE IR MONITOR A MOMENT TO REGISTER LAST COIN
+  // ===================================================
+
+  delay(200);
+
+
+  // ===================================================
+  // REPORT
+  // ===================================================
+
+  reportOnePesoResult(quantity);
+
+  Serial.println(F("STATUS:PHP 1 DISPENSING COMPLETE"));
+}
+
+
+// =====================================================
+// ₱5 DISPENSER
 // =====================================================
 
 void dispenseFivePeso()
 {
+  detected5 = 0;
+
   Serial.println(F("STATUS:DISPENSING PHP 5"));
 
   servo5.write(PUSH_5_ANGLE);
 
-  unsigned long startTime = millis();
-
-  bool coinDetected = false;
-
-
-  while (millis() - startTime < SENSOR_TIMEOUT)
-  {
-    if (digitalRead(IR_5_PIN) == LOW)
-    {
-      coinDetected = true;
-      break;
-    }
-  }
-
+  delay(COIN_PUSH_HOLD);
 
   servo5.write(HOME_ANGLE);
 
+  delay(200);
 
-  if (coinDetected)
-  {
-    Serial.println(F("COIN5:SENSOR"));
-    Serial.println(F("STATUS:PHP 5 DISPENSED"));
-  }
-  else
-  {
-    Serial.println(F("STATUS:PHP 5 DISPENSER TIMEOUT"));
-  }
+  reportFivePesoResult();
+
+  Serial.println(F("STATUS:PHP 5 DISPENSED"));
 }
 
 
 // =====================================================
-// ₱10
+// ₱10 DISPENSER
 // =====================================================
 
 void dispenseTenPeso()
 {
+  detected10 = 0;
+
   Serial.println(F("STATUS:DISPENSING PHP 10"));
 
   servo10.write(PUSH_10_ANGLE);
 
-  unsigned long startTime = millis();
-
-  bool coinDetected = false;
-
-
-  while (millis() - startTime < SENSOR_TIMEOUT)
-  {
-    if (digitalRead(IR_10_PIN) == LOW)
-    {
-      coinDetected = true;
-      break;
-    }
-  }
-
+  delay(COIN_PUSH_HOLD);
 
   servo10.write(HOME_ANGLE);
 
+  delay(200);
 
-  if (coinDetected)
-  {
-    Serial.println(F("COIN10:SENSOR"));
-    Serial.println(F("STATUS:PHP 10 DISPENSED"));
-  }
-  else
-  {
-    Serial.println(F("STATUS:PHP 10 DISPENSER TIMEOUT"));
-  }
+  reportTenPesoResult();
+
+  Serial.println(F("STATUS:PHP 10 DISPENSED"));
 }
 
 
 // =====================================================
-// ₱20
+// ₱20 DISPENSER
 // =====================================================
 
 void dispenseTwentyPeso()
 {
+  detected20 = 0;
+
   Serial.println(F("STATUS:DISPENSING PHP 20"));
 
   servo20.write(PUSH_20_ANGLE);
 
-  unsigned long startTime = millis();
-
-  bool coinDetected = false;
-
-
-  while (millis() - startTime < SENSOR_TIMEOUT)
-  {
-    if (digitalRead(IR_20_PIN) == LOW)
-    {
-      coinDetected = true;
-      break;
-    }
-  }
-
+  delay(COIN_PUSH_HOLD);
 
   servo20.write(HOME_ANGLE);
 
+  delay(200);
 
-  if (coinDetected)
-  {
-    Serial.println(F("COIN20:SENSOR"));
-    Serial.println(F("STATUS:PHP 20 DISPENSED"));
-  }
-  else
-  {
-    Serial.println(F("STATUS:PHP 20 DISPENSER TIMEOUT"));
-  }
+  reportTwentyPesoResult();
+
+  Serial.println(F("STATUS:PHP 20 DISPENSED"));
 }
 
 
@@ -264,4 +577,6 @@ void coinDispensersHome()
   servo5.write(HOME_ANGLE);
   servo10.write(HOME_ANGLE);
   servo20.write(HOME_ANGLE);
+
+  Serial.println(F("ALL COIN SERVOS -> HOME"));
 }

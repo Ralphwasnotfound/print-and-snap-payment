@@ -98,6 +98,13 @@ void loop()
 
   updateCoinAcceptor();
   updateBillAcceptor();
+
+
+  // ---------------------------------------------------
+  // Monitor coin dispenser IR sensors
+  // ---------------------------------------------------
+
+  updateCoinSensors();
 }
 
 
@@ -164,40 +171,41 @@ void handleSerialCommand(String command)
     return;
   }
 
-// ===================================================
-// MANUAL BILL PAYMENT
-// ===================================================
 
-if (command.startsWith("BILL:"))
-{
-  String value = command.substring(5);
+  // ===================================================
+  // MANUAL BILL PAYMENT
+  // ===================================================
 
-  int amount = value.toInt();
-
-  if (amount == 50 ||
-      amount == 100 ||
-      amount == 500 ||
-      amount == 1000)
+  if (command.startsWith("BILL:"))
   {
-    if (paymentActive)
-    {
-      addPayment(amount);
+    String value = command.substring(5);
 
-      Serial.print(F("BILL ACCEPTED:"));
-      Serial.println(amount);
+    int amount = value.toInt();
+
+    if (amount == 50 ||
+        amount == 100 ||
+        amount == 500 ||
+        amount == 1000)
+    {
+      if (paymentActive)
+      {
+        addPayment(amount);
+
+        Serial.print(F("BILL ACCEPTED:"));
+        Serial.println(amount);
+      }
+      else
+      {
+        Serial.println(F("STATUS:PAYMENT NOT ACTIVE"));
+      }
     }
     else
     {
-      Serial.println(F("STATUS:PAYMENT NOT ACTIVE"));
+      Serial.println(F("STATUS:INVALID BILL"));
     }
-  }
-  else
-  {
-    Serial.println(F("STATUS:INVALID BILL"));
-  }
 
-  return;
-}
+    return;
+  }
 
 
   // ===================================================
@@ -231,7 +239,7 @@ if (command.startsWith("BILL:"))
 
   if (command == "DISPENSE:1")
   {
-    dispenseOnePeso();
+    dispenseOnePeso(1);
 
     Serial.println(F("DISPENSE:1:COMPLETE"));
 
@@ -380,6 +388,26 @@ void sendHardwareStatus()
 
 
 // =====================================================
+// SEND PAYMENT STATUS
+// =====================================================
+
+void sendPaymentStatus()
+{
+  Serial.print(F("TOTAL:"));
+  Serial.println(paymentTotal);
+
+  Serial.print(F("PAYMENT:"));
+  Serial.println(paymentInserted);
+
+  Serial.print(F("BALANCE:"));
+  Serial.println(paymentBalance);
+
+  Serial.print(F("CHANGE:"));
+  Serial.println(paymentChange);
+}
+
+
+// =====================================================
 // START PAYMENT
 // =====================================================
 
@@ -443,10 +471,13 @@ void addPayment(int amount)
   if (!paymentActive)
     return;
 
-
   if (amount <= 0)
     return;
 
+
+  // ---------------------------------------------------
+  // Add payment
+  // ---------------------------------------------------
 
   paymentInserted += amount;
 
@@ -465,6 +496,10 @@ void addPayment(int amount)
     paymentActive = false;
 
 
+    // =================================================
+    // SEND FINAL PAYMENT STATUS
+    // =================================================
+
     Serial.print(F("PAYMENT:"));
     Serial.println(paymentInserted);
 
@@ -475,6 +510,21 @@ void addPayment(int amount)
     Serial.println(paymentChange);
 
     Serial.println(F("STATUS:PAYMENT COMPLETE"));
+
+
+    // =================================================
+    // AUTOMATIC DYNAMIC CHANGE
+    // =================================================
+
+    if (paymentChange > 0)
+    {
+      Serial.print(F("STATUS:DISPENSING CHANGE PHP "));
+      Serial.println(paymentChange);
+
+      dispenseChange(paymentChange);
+
+      Serial.println(F("STATUS:CHANGE DISPENSE COMPLETE"));
+    }
 
     return;
   }
@@ -504,34 +554,99 @@ void addPayment(int amount)
 
 
 // =====================================================
-// SEND PAYMENT STATUS
+// DISPENSE DYNAMIC CHANGE
+// =====================================================
+//
+// Available denominations:
+// ₱20, ₱10, ₱5, ₱1
+//
+// The actual change amount is calculated dynamically.
+// Nothing is hardcoded to a specific amount.
+//
 // =====================================================
 
-void sendPaymentStatus()
+void dispenseChange(int change)
 {
-  Serial.print(F("TOTAL:"));
-  Serial.println(paymentTotal);
-
-  Serial.print(F("PAYMENT:"));
-  Serial.println(paymentInserted);
-
-  Serial.print(F("BALANCE:"));
-  Serial.println(paymentBalance);
-
-  Serial.print(F("CHANGE:"));
-  Serial.println(paymentChange);
+  if (change <= 0)
+    return;
 
 
-  if (!paymentActive && paymentTotal == 0)
+  int remaining = change;
+
+
+  Serial.println(F("======================================"));
+
+  Serial.print(F("DISPENSING CHANGE: PHP "));
+  Serial.println(change);
+
+  Serial.println(F("======================================"));
+
+
+  // ===================================================
+  // ₱20 COINS
+  // ===================================================
+
+  while (remaining >= 20)
   {
-    Serial.println(F("STATUS:READY"));
+    dispenseTwentyPeso();
+
+    remaining -= 20;
+
+    Serial.print(F("REMAINING CHANGE: PHP "));
+    Serial.println(remaining);
   }
-  else if (paymentActive)
+
+
+  // ===================================================
+  // ₱10 COINS
+  // ===================================================
+
+  while (remaining >= 10)
   {
-    Serial.println(F("STATUS:WAITING FOR PAYMENT"));
+    dispenseTenPeso();
+
+    remaining -= 10;
+
+    Serial.print(F("REMAINING CHANGE: PHP "));
+    Serial.println(remaining);
   }
-  else
+
+
+  // ===================================================
+  // ₱5 COINS
+  // ===================================================
+
+  while (remaining >= 5)
   {
-    Serial.println(F("STATUS:PAYMENT COMPLETE"));
+    dispenseFivePeso();
+
+    remaining -= 5;
+
+    Serial.print(F("REMAINING CHANGE: PHP "));
+    Serial.println(remaining);
   }
+
+
+  // ===================================================
+  // ₱1 COINS
+  // ===================================================
+
+  while (remaining >= 1)
+  {
+    dispenseOnePeso(1);
+
+    remaining -= 1;
+
+    Serial.print(F("REMAINING CHANGE: PHP "));
+    Serial.println(remaining);
+  }
+
+
+  // ===================================================
+  // COMPLETE
+  // ===================================================
+
+  Serial.println(F("======================================"));
+  Serial.println(F("CHANGE DISPENSING COMPLETE"));
+  Serial.println(F("======================================"));
 }
